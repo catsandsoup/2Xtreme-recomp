@@ -5,26 +5,34 @@ snowboarding around the world, as a native Mac app. Bring your own disc:
 the app builds the game on your Mac from your copy, the first time you open
 it. No emulator setup and no BIOS file needed.
 
-> **Status: work in progress, no download yet.** First launch and the pause
+> **Status: early preview, built in public.** First launch and the pause
 > menu work; the rest of the roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
+> Download the latest preview from
+> [Releases](https://github.com/catsandsoup/2Xtreme-recomp/releases), or build
+> it yourself (below).
 
-## How it will work for players
+## How it works for players
 
-1. Download `2Xtreme.app` and drag it to Applications.
-2. Open it and choose (or drop) your **2Xtreme (USA)** disc image. Use the
+1. Download `2Xtreme.zip` from
+   [Releases](https://github.com/catsandsoup/2Xtreme-recomp/releases), unzip
+   it and drag `2Xtreme.app` to Applications.
+2. The app isn't notarized by Apple yet, so the first time macOS will refuse
+   to open it. Open it once, then go to **System Settings → Privacy &
+   Security**, scroll down and click **Open Anyway**.
+3. Choose (or drop) your **2Xtreme (USA)** disc image. Use the
    `.cue` file so the music tracks come along.
-3. Wait about 15 seconds while it prepares the game for your Mac. Then you're
+4. Wait about 15 seconds while it prepares the game for your Mac. Then you're
    at the 2Xtreme intro. Later launches go straight to the game.
 
-**What you need:** a Mac with Apple silicon, and your own disc image of
+**What you need:** a Mac with Apple silicon on macOS 26 or later, and your own disc image of
 2Xtreme (USA), SCUS-94508, as `.cue` + `.bin` (or a single `.bin` / `.iso`,
 without music). `.chd` isn't supported yet. You don't need Xcode, Apple's
 command line tools, Homebrew or Python.
 
 **In the game:** press **Esc** (or **⌘,**, the controller's **Guide**
 button, or **Select + Start**) to pause and open the menu: Resume, Picture
-(sharpness, textures, full screen), Sound (volume), Quit. Changes apply
-straight away and are remembered.
+(sharpness, textures, full screen), Sound (volume), Quit. Changes are
+remembered; picture changes show as soon as you resume.
 
 **Your files** live in `~/Library/Application Support/2Xtreme/`:
 
@@ -45,7 +53,8 @@ To start over, quit and delete that folder.
 | ⏳ The game's own **Options** item opens the same menu | M4 |
 | ⏳ Full speed everywhere, verified picture settings, maybe true widescreen | M5 |
 | ⏳ Controller rebinding, rumble, Player 2, save states | M6 |
-| ⏳ Downloadable release | M7 |
+| ✅ Preview download (not notarized yet) | |
+| ⏳ Signed, notarized release; older macOS versions | M7 |
 
 Gameplay is the original. Experiments (16 racers, forced high-detail models)
 are developer-only and off.
@@ -65,22 +74,37 @@ Start with [docs/HANDOFF.md](docs/HANDOFF.md). Project rules:
 [docs/PLAYER_JOURNEY.md](docs/PLAYER_JOURNEY.md), why on-device building:
 [docs/DISTRIBUTION_RESEARCH.md](docs/DISTRIBUTION_RESEARCH.md).
 
-Build the app (needs Xcode, CMake, Ninja, Homebrew SDL3/FreeType/HarfBuzz,
-and zig 0.16.0 unpacked somewhere):
+### Build the app from source
+
+You don't need the disc to build the app: it contains no game code and
+builds the game on first launch, like the download. You need an Apple
+silicon Mac on macOS 26+, Apple's command line tools (`xcode-select
+--install`), [Homebrew](https://brew.sh) and
+[zig 0.16.0](https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz)
+(sha256 `b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489`),
+which the app bundles as its on-device compiler.
 
 ```bash
-git submodule update --init --recursive
-git -C psxrecomp apply ../patches/psxrecomp/*.patch
-./psxrecomp/tools/ci/build_emitters.sh
-ZIG_DIST=/path/to/zig-aarch64-macos-0.16.0 tools/macos/make_app.sh dist
+brew install cmake ninja freetype harfbuzz
+git clone --recursive https://github.com/catsandsoup/2Xtreme-recomp.git
+cd 2Xtreme-recomp
+git -C psxrecomp apply "$PWD"/patches/psxrecomp/*.patch
+ZIG_DIST=/path/to/zig-aarch64-macos-0.16.0 tools/macos/make_app.sh
 ```
 
-`dist/2Xtreme.app` contains no game code. Test hooks (fresh data folder,
-automatic disc pick, scripted menu input) are listed in the handoff.
+The result is `dist/2Xtreme.app` (about 250 MB, a few minutes the first
+time). The script builds the runtime against a pinned SDL3 release, packs the
+SDK, recompiler and zig, signs ad hoc, and runs a release guard (no
+disc-derived data, no local paths, nothing that needs a newer macOS). Test
+hooks (fresh data folder, automatic disc pick, scripted menu input) are
+listed in the handoff.
 
-Dev build with debug tools, from your own disc (the generated C stays local):
+### Dev build with debug tools, from your own disc
+
+The generated C stays local:
 
 ```bash
+./psxrecomp/tools/ci/build_emitters.sh
 python3 psxrecomp/psxrecomp_cli.py generate \
   --config game.toml --project-root . --disc disc/<your>.cue
 cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
