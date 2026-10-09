@@ -18,7 +18,7 @@ sees, with fresh screenshots.
 | M4 game's own Options | Not started | |
 | M5 picture/performance | Not started. Owner saw **52 fps / 0.86×** | |
 | M6 controls/saves | Not started | |
-| M7 release | Not started | |
+| M7 release | Started: fresh-clone build works; preview `v0.1.0-preview` published (zip, not notarized, owner-approved). Still to do: DMG, CI build, notarization | [release](https://github.com/catsandsoup/2Xtreme-recomp/releases/tag/v0.1.0-preview) |
 
 ### M3 details
 - Code: `platform/overlay/twox_overlay.cpp` (model = recomp-ui runtime UI,
