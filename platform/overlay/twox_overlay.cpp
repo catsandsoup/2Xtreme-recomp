@@ -330,7 +330,13 @@ void capture_frame() {
     if (!S.frame_tex) glGenTextures(1, &S.frame_tex);
     glBindTexture(GL_TEXTURE_2D, S.frame_tex);
     if (w != S.frame_w || h != S.frame_h) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        /* RGB, not RGBA: the game's frame carries alpha 0 almost everywhere,
+         * so an RGBA copy drew as black under ImGui's blending. */
+        GLint prev_unpack = 0;
+        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &prev_unpack);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, (GLuint)prev_unpack);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         S.frame_w = w; S.frame_h = h;
