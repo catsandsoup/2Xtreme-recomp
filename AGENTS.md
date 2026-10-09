@@ -3,6 +3,10 @@
 **Read [docs/PRODUCT_RULES.md](docs/PRODUCT_RULES.md) first, every session.**
 It is the standing rule for this project. Apply each section before writing
 code, and judge every milestone against its player goal and "Done means".
+For any screen, hook or setting, also follow
+[docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md) and run the UX and
+style critics (`.claude/agents/ux-critic.md`, `.claude/agents/style-critic.md`)
+on fresh screenshots before calling it done.
 
 Working rules:
 
