@@ -126,6 +126,11 @@ cc -O2 -fobjc-arc -Wall -Wno-deprecated-declarations \
    -framework Cocoa -framework GameController -o "$C/MacOS/2Xtreme"
 VERSION="$(cat "$REPO/VERSION")"
 BUILD_ID="$(git -C "$REPO" rev-parse --short HEAD)"
+# Uncommitted work: add the runtime's hash, so a local rebuild re-prepares
+# the installed game instead of silently keeping the old one.
+if ! git -C "$REPO" diff --quiet HEAD -- . ':!psxrecomp' || ! git -C "$REPO/psxrecomp" diff --quiet HEAD; then
+  BUILD_ID="$BUILD_ID+$(shasum "$RES/runtime/2Xtreme" | cut -c1-7)"
+fi
 sed -e "s/<string>1.0.0<\/string>/<string>$VERSION<\/string>/" \
     -e "s/<key>CFBundleVersion<\/key>\n\s*<string>1<\/string>//" \
     "$REPO/platform/macos/Info.plist" > "$C/Info.plist"
