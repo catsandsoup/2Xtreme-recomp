@@ -17,12 +17,18 @@ OUT="${1:-$REPO/dist}"
 mkdir -p "$OUT" && OUT="$(cd "$OUT" && pwd)"   # the script cd's around; keep OUT absolute
 BUILD="$REPO/build-shipping"
 : "${ZIG_DIST:?set ZIG_DIST to an unpacked zig-aarch64-macos release}"
+# Oldest macOS the app runs on. Homebrew's SDL3/FreeType/HarfBuzz bottles set
+# the floor (they are built for macOS 26); our own code is built to match.
+MACOS_MIN=26.0
+export MACOSX_DEPLOYMENT_TARGET="$MACOS_MIN"
 APP="$OUT/2Xtreme.app"
 C="$APP/Contents"
 RES="$C/Resources"
 
 echo "== 1/7 Runtime (OpenBIOS only: no Sony BIOS code)"
-cmake -S "$REPO" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSXRECOMP_BIOS_STEMS=OpenBIOS >/dev/null
+cmake -S "$REPO" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSXRECOMP_BIOS_STEMS=OpenBIOS \
+      -DTWOX_GAME_MODULE_HOST=ON -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_MIN" \
+      -DCMAKE_DISABLE_FIND_PACKAGE_SDL3=ON >/dev/null   # pinned SDL3, built for MACOS_MIN
 cmake --build "$BUILD" --target psx-runtime >/dev/null
 
 rm -rf "$APP"
@@ -33,18 +39,23 @@ cd "$BUILD"
 LINK="$(ninja -t commands psx-runtime | grep -- '-o 2Xtreme.app/Contents/MacOS/2Xtreme ' | tail -1)"
 LINK="${LINK#: && }"
 LINK="${LINK%% && *}"
-OBJS=(); STATIC=(); DYLIBS=()
+OBJS=(); STATIC=(); DYLIBS=(); SYSLIBS=()
+abs() { case "$1" in /*) echo "$1" ;; *) echo "$BUILD/$1" ;; esac; }
+prev=""
 for tok in $LINK; do
+  # System frameworks SDL3 needs, incl. weak ones passed as -Xlinker pairs.
+  if [ "$prev" = "-framework" ] || [ "$prev" = "-Xlinker" ]; then SYSLIBS+=("$prev" "$tok"); prev=""; continue; fi
   case "$tok" in
-    *generated/SCUS_*.o) ;;                       # the game: built on the player's Mac
-    *.o) OBJS+=("$BUILD/$tok") ;;
-    *.a) STATIC+=("$BUILD/$tok") ;;
+    *generated/SCUS_*.o|*game_sdk_probe.c.o) ;;   # never game code in the runtime
+    *.o) OBJS+=("$(abs "$tok")") ;;
+    *.a) STATIC+=("$(abs "$tok")") ;;
     *.dylib) DYLIBS+=("$tok") ;;
+    -l*) SYSLIBS+=("$tok") ;;
   esac
+  prev="$tok"
 done
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-cc -O2 -c "$REPO/platform/macos/game_module_loader.c" -o "$TMP/loader.o"
 
 # Bundle every non-system dylib, recursively, under @rpath.
 is_foreign() { case "$1" in /usr/lib/*|/System/*|@*) return 1 ;; *) return 0 ;; esac; }
@@ -69,8 +80,8 @@ for d in "${DYLIBS[@]}"; do
   bundle_dylib "$d"
   BUNDLED+=("$RES/runtime/lib/$(basename "$(otool -D "$(readlink -f "$d")" | tail -1)")")
 done
-c++ -O3 -arch arm64 -o "$RES/runtime/2Xtreme" "$TMP/loader.o" "${OBJS[@]}" "${STATIC[@]}" "${BUNDLED[@]}" \
-    -lz -framework OpenGL -framework AppKit -framework Foundation -framework Cocoa \
+c++ -O3 -arch arm64 -o "$RES/runtime/2Xtreme" "${OBJS[@]}" "${STATIC[@]}" "${BUNDLED[@]}" \
+    ${SYSLIBS[@]+"${SYSLIBS[@]}"} -lz -framework OpenGL -framework AppKit -framework Foundation -framework Cocoa \
     -Wl,-export_dynamic -Wl,-rpath,@executable_path/lib
 codesign --force -s - "$RES/runtime/2Xtreme"
 APPDIR="$BUILD/2Xtreme.app/Contents/MacOS"
@@ -79,7 +90,8 @@ cp "$REPO/recomp-ui/keybinds.ini" "$RES/runtime/" 2>/dev/null || true
 rm -f "$RES/runtime/mods/state.toml"
 
 echo "== 3/7 SDK: headers and flags for the game C"
-CC_CMD="$(ninja -t commands psx-runtime | grep -- 'generated/SCUS_945.08_full_00.c' | grep -- ' -c ' | head -1)"
+CC_CMD="$(ninja -t commands psx-runtime | grep -- 'platform/macos/game_sdk_probe.c' | grep -- ' -c ' | head -1)"
+[ -n "$CC_CMD" ] || { echo "make_app: no compile command for the game C flags"; exit 1; }
 eval "TOKS=($CC_CMD)"
 FLAGS=(); INCS=()
 i=0
@@ -104,7 +116,8 @@ done
 cd "$REPO"
 
 echo "== 4/7 Recompiler and its config"
-cp build-recompiler/psxrecomp-game "$RES/tools/"
+psxrecomp/tools/ci/build_emitters.sh --build-dir "$BUILD/recompiler" >/dev/null
+cp "$BUILD/recompiler/psxrecomp-game" "$RES/tools/"
 cp game.toml game_options.toml symbols.toml "$RES/project/"
 cp -R seeds "$RES/project/"
 cp psxrecomp/bios/*.toml "$RES/project/bios/"
@@ -135,6 +148,7 @@ sed -e "s/<string>1.0.0<\/string>/<string>$VERSION<\/string>/" \
     -e "s/<key>CFBundleVersion<\/key>\n\s*<string>1<\/string>//" \
     "$REPO/platform/macos/Info.plist" > "$C/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_ID" "$C/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MACOS_MIN" "$C/Info.plist"
 ICONSET="$TMP/AppIcon.iconset"; mkdir -p "$ICONSET"
 for s in 16 32 128 256 512; do
   sips -z $s $s "$REPO/assets/psxrecomp.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
@@ -149,7 +163,8 @@ cp psxrecomp/bios/OpenBIOS.LICENSE "$RES/licenses/OpenBIOS.txt"
 cp recomp-ui/LICENSE "$RES/licenses/recomp-ui.txt"
 cp "$ZIG_DIST/LICENSE" "$RES/licenses/zig.txt"
 cp -R psxrecomp/runtime/licenses/. "$RES/licenses/" 2>/dev/null || true
-for lib in sdl3 freetype harfbuzz; do
+cp "$BUILD/_deps/sdl3-src/LICENSE.txt" "$RES/licenses/SDL3-LICENSE.txt"
+for lib in freetype harfbuzz; do
   for f in /opt/homebrew/opt/$lib/{LICENSE*,COPYING*,LICENSE.txt,docs/FTL.TXT}; do
     [ -f "$f" ] && cp "$f" "$RES/licenses/$lib-$(basename "$f")"
   done
@@ -165,6 +180,12 @@ if grep -rIl "/Users/" "$RES/project" "$RES/sdk/cflags.txt" "$RES/runtime/game.t
   echo "GUARD: local path found"; bad=1
 fi
 if nm "$RES/runtime/2Xtreme" | grep -q "func_8001"; then echo "GUARD: game code in runtime"; bad=1; fi
+while IFS= read -r f; do
+  minos="$(otool -l "$f" | awk '/LC_BUILD_VERSION/{b=1} b&&/minos/{print $2; exit}')"
+  if [ -n "$minos" ] && [ "$(printf '%s\n%s\n' "$minos" "$MACOS_MIN" | sort -V | tail -1)" != "$MACOS_MIN" ]; then
+    echo "GUARD: $(basename "$f") needs macOS $minos (app promises $MACOS_MIN)"; bad=1
+  fi
+done < <(find "$APP" -type f \( -perm -u+x -o -name '*.dylib' \) -exec sh -c 'file -b "$1" | grep -q Mach-O && echo "$1"' _ {} \;)
 [ $bad = 0 ] || { echo "release guard FAILED"; exit 1; }
 echo "release guard OK"
 du -sh "$APP"

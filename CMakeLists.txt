@@ -35,6 +35,20 @@ if(NOT IS_DIRECTORY "${PSX_PRELOADED_MODS}")
     set(PSX_PRELOADED_MODS "NONE")
 endif()
 
+# Shipping runtime (tools/macos/make_app.sh): built with no game code at all,
+# so it builds from a fresh clone without a disc. The game-module loader fills
+# the dispatch slot (it forwards to game.dylib, compiled on the player's Mac)
+# and an empty probe fills the game-C slot so its compile flags can be
+# recorded for that on-device build. Dev builds use the local generated/ C.
+option(TWOX_GAME_MODULE_HOST "Build the runtime that loads game.dylib (no game C)" OFF)
+if(TWOX_GAME_MODULE_HOST)
+    set(_twox_gen_marker "platform/macos/game_module_loader.c")
+    set(_twox_gen_full "platform/macos/game_sdk_probe.c")
+else()
+    set(_twox_gen_marker "generated/SCUS_945.08_dispatch.c")
+    set(_twox_gen_full "generated/SCUS_945.08_full_*.c")
+endif()
+
 psxrecomp_add_game_runtime(psx-runtime
     PRELOADED_MODS_DIR "${PSX_PRELOADED_MODS}"
     # ENABLE_NETPLAY_IF_PRESENT
@@ -49,8 +63,8 @@ psxrecomp_add_game_runtime(psx-runtime
     # Committed game C (psxrecomp_cli.py generate; git add generated). Release
     # CI configures with -DPSXRECOMP_REQUIRE_GAME_C=ON so a checkout without
     # it fails instead of building a setup host.
-    GEN_MARKER "generated/SCUS_945.08_dispatch.c"
-    GEN_FULL_GLOB "generated/SCUS_945.08_full_*.c"
+    GEN_MARKER "${_twox_gen_marker}"
+    GEN_FULL_GLOB "${_twox_gen_full}"
     CODEGEN_SETUP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/codegen_setup.c"
 )
 
