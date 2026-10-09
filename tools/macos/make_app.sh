@@ -14,6 +14,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-$REPO/dist}"
+mkdir -p "$OUT" && OUT="$(cd "$OUT" && pwd)"   # the script cd's around; keep OUT absolute
 BUILD="$REPO/build-shipping"
 : "${ZIG_DIST:?set ZIG_DIST to an unpacked zig-aarch64-macos release}"
 APP="$OUT/2Xtreme.app"
