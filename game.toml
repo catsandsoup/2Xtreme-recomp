@@ -36,7 +36,7 @@ out_dir = "generated"
 strict = true
 
 [runtime]
-window_title = "2Xtreme Recompiled"
+window_title = "2Xtreme"
 memcard_dir = "saves"
 overlay_cache = true
 

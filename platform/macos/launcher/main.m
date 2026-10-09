@@ -68,6 +68,14 @@ static void LaunchGameAndExit(void) {
     exit(1);
 }
 
+/* One 4:3 size for setup and game, so the hand-off doesn't jump. */
+static int GameWindowWidth(void) {
+    NSRect vis = [NSScreen mainScreen].visibleFrame;
+    int byHeight = (int)(vis.size.height * 0.85) * 4 / 3;
+    int w = MIN(1200, MIN((int)(vis.size.width * 0.85), byHeight));
+    return MAX(640, w / 4 * 4);
+}
+
 /* ---------- Look: tokens sampled from 2Xtreme's menus (docs/DESIGN_PRINCIPLES.md) ---------- */
 
 #define TWOX_YELLOW [NSColor colorWithSRGBRed:0.96 green:0.85 blue:0.18 alpha:1]
@@ -123,6 +131,7 @@ typedef NS_ENUM(NSInteger, SetupState) { SetupWelcome, SetupWorking, SetupError 
 @property (nonatomic, copy) NSString *timeLeft;
 @property (nonatomic) double progress;
 @property (nonatomic) BOOL controllerActive;
+@property (nonatomic) BOOL playStationPad;
 @property (nonatomic) BOOL dropHover;
 @property (nonatomic, copy) void (^onPrimary)(void);
 @property (nonatomic, copy) void (^onDrop)(NSString *path);
@@ -148,28 +157,33 @@ typedef NS_ENUM(NSInteger, SetupState) { SetupWelcome, SetupWorking, SetupError 
         CGFloat off = (row % 2) ? bw / 2 : 0;
         for (CGFloat x = -off; x < NSWidth(b); x += bw) {
             NSRect brick = NSMakeRect(x + 1.5, row * bh + 1.5, bw - 3, bh - 3);
-            CGFloat shade = 0.10 + 0.03 * ((row * 7 + (int)(x / bw) * 3) % 4);
-            [[NSColor colorWithSRGBRed:shade + 0.07 green:shade * 0.55 blue:shade * 0.42 alpha:1] setFill];
+            CGFloat shade = 0.06 + 0.02 * ((row * 7 + (int)(x / bw) * 3) % 4);
+            [[NSColor colorWithSRGBRed:shade + 0.05 green:shade * 0.50 blue:shade * 0.40 alpha:1] setFill];
             [[NSBezierPath bezierPathWithRoundedRect:brick xRadius:1.5 yRadius:1.5] fill];
         }
     }
     /* One spotlight from above, heavy vignette, like the original menu. */
     NSGradient *spot = [[NSGradient alloc] initWithColorsAndLocations:
-        [NSColor colorWithSRGBRed:0.35 green:0.40 blue:0.95 alpha:0.30], 0.0,
-        [NSColor colorWithSRGBRed:0.20 green:0.20 blue:0.55 alpha:0.12], 0.45,
-        [NSColor colorWithWhite:0 alpha:0.86], 1.0, nil];
-    [spot drawInRect:b relativeCenterPosition:NSMakePoint(0, 0.55)];
+        [NSColor colorWithSRGBRed:0.30 green:0.36 blue:1.00 alpha:0.42], 0.0,
+        [NSColor colorWithSRGBRed:0.18 green:0.20 blue:0.70 alpha:0.20], 0.40,
+        [NSColor colorWithWhite:0 alpha:0.55], 0.72,
+        [NSColor colorWithWhite:0 alpha:0.94], 1.0, nil];
+    [spot drawInRect:b relativeCenterPosition:NSMakePoint(0, 0.35)];
+    /* The lamp itself, top centre, as in the original menu. */
+    NSGradient *lamp = [[NSGradient alloc] initWithColorsAndLocations:
+        [NSColor colorWithWhite:1 alpha:0.95], 0.0, [NSColor colorWithWhite:1 alpha:0.0], 1.0, nil];
+    [lamp drawInRect:NSMakeRect(NSMidX(b) - 70, NSHeight(b) - 26, 140, 52) relativeCenterPosition:NSZeroPoint];
 }
 
 - (void)drawPromptStrip {
     NSRect b = self.bounds;
     NSString *action = self.state == SetupWorking ? nil
-        : (self.controllerActive ? @"Ⓐ  " : @"Return  ");
+        : (self.controllerActive ? (self.playStationPad ? @"✕  " : @"Ⓐ  ") : @"Return  ");
     if (!action) return;
     NSString *label = self.state == SetupError ? @"Try again" : @"Choose disc";
     NSString *s = [action stringByAppendingString:label];
     NSDictionary *a = @{NSFontAttributeName: BlockFont(20), NSForegroundColorAttributeName: TWOX_TEXT};
-    NSRect strip = NSMakeRect(24, 20, [s sizeWithAttributes:a].width + 32, 38);
+    NSRect strip = NSMakeRect(24, 20, ceil([s sizeWithAttributes:a].width) + 48, 38);
     [[NSColor colorWithWhite:0 alpha:0.55] setFill];
     [[NSBezierPath bezierPathWithRect:strip] fill];
     [s drawAtPoint:NSMakePoint(strip.origin.x + 16, strip.origin.y + 7) withAttributes:a];
@@ -209,7 +223,11 @@ typedef NS_ENUM(NSInteger, SetupState) { SetupWelcome, SetupWorking, SetupError 
         [[NSBezierPath bezierPathWithRect:NSOffsetRect(r, 5, -5)] fill];
         [(self.dropHover ? TWOX_GREEN : TWOX_YELLOW) setFill];
         [[NSBezierPath bezierPathWithRect:r] fill];
-        DrawBlockText(self.buttonTitle ?: @"", NSMakePoint(NSMidX(r), NSMidY(r) + 2), 30, TWOX_INK);
+        NSDictionary *la = @{NSFontAttributeName: BlockFont(30), NSForegroundColorAttributeName: TWOX_INK,
+                             NSKernAttributeName: @(1.0)};
+        NSSize ls = [self.buttonTitle sizeWithAttributes:la];
+        [self.buttonTitle drawAtPoint:NSMakePoint(round(NSMidX(r) - ls.width / 2), round(NSMidY(r) - ls.height / 2))
+                       withAttributes:la];
     }
     [self drawPromptStrip];
 }
@@ -459,7 +477,7 @@ static int RunTool(NSString *exe, NSArray<NSString *> *args, NSString *cwd, NSSt
          "internal_resolution = \"1080p\"\n"
          "texture_filtering = \"nearest\"\n"
          "aspect_ratio = \"4:3\"\n"
-         "window_width = 1280\n"
+         "window_width = %d\n"
          "fullscreen = 0\n\n"
          "[launcher]\n"
          "skip_launcher = true\n\n"
@@ -474,7 +492,7 @@ static int RunTool(NSString *exe, NSArray<NSString *> *args, NSString *cwd, NSSt
          "[controller]\n"
          "p1_device = \"auto\"\n"
          "p2_device = \"none\"\n",
-        discPath, saves, saves, saves];
+        GameWindowWidth(), discPath, saves, saves, saves];
     [toml writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 @end
@@ -491,7 +509,7 @@ static int RunTool(NSString *exe, NSArray<NSString *> *args, NSString *cwd, NSSt
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
-    NSRect frame = NSMakeRect(0, 0, 1000, 640);
+    NSRect frame = NSMakeRect(0, 0, GameWindowWidth(), GameWindowWidth() * 3 / 4);
     self.window = [[NSWindow alloc] initWithContentRect:frame
                                               styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                                                         NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskFullSizeContentView
@@ -603,7 +621,8 @@ static int RunTool(NSString *exe, NSArray<NSString *> *args, NSString *cwd, NSSt
         NSTimeInterval spent = -[s.started timeIntervalSinceNow];
         if (f > 0.08 && f < 1) {
             int left = (int)ceil(spent / f * (1 - f));
-            s.view.timeLeft = left <= 5 ? @"Almost there" : [NSString stringWithFormat:@"About %d seconds left", (left + 4) / 5 * 5];
+            s.view.timeLeft = left <= 3 ? @"Almost there"
+                            : [NSString stringWithFormat:@"About %d seconds left", left];
         }
         [s.view setNeedsDisplay:YES];
     };
@@ -616,6 +635,8 @@ static int RunTool(NSString *exe, NSArray<NSString *> *args, NSString *cwd, NSSt
 - (void)watchControllers {
     __weak AppDelegate *weak = self;
     void (^attach)(GCController *) = ^(GCController *c) {
+        NSString *cat = c.productCategory ?: @"";
+        weak.view.playStationPad = [cat containsString:@"DualShock"] || [cat containsString:@"DualSense"];
         c.extendedGamepad.buttonA.pressedChangedHandler = ^(GCControllerButtonInput *b, float v, BOOL pressed) {
             AppDelegate *s = weak; if (!s || !pressed) return;
             s.view.controllerActive = YES;
