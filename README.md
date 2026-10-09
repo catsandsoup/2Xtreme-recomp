@@ -1,100 +1,96 @@
-# 2Xtreme
+# 2Xtreme for Mac
 
-<!-- retcomm-readme-metrics -->
-[![GitHub downloads (all assets, all releases)](https://img.shields.io/github/downloads/RetroPortingToolKit/2Xtreme/total)](https://github.com/RetroPortingToolKit/2Xtreme/releases)
-[![GitHub downloads (latest release)](https://img.shields.io/github/downloads/RetroPortingToolKit/2Xtreme/latest/total)](https://github.com/RetroPortingToolKit/2Xtreme/releases/latest)
-[![GitHub release](https://img.shields.io/github/v/release/RetroPortingToolKit/2Xtreme)](https://github.com/RetroPortingToolKit/2Xtreme/releases/latest)
-<!-- /retcomm-readme-metrics -->
+Play **2Xtreme** (PlayStation, 1996), skating, biking, blading and
+snowboarding around the world, as a native Mac app. Bring your own disc:
+the app builds the game on your Mac from your copy, the first time you open
+it. No emulator setup and no BIOS file needed.
 
-Static recompilation of **2Xtreme** built on
-[psxrecomp](https://github.com/mstan/psxrecomp) and
-[recomp-ui](https://github.com/RetroPortingToolKit/recomp-ui).
+> **Status: work in progress, no download yet.** First launch and the pause
+> menu work; the rest of the roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**Goal:** a player downloads a Mac app, picks their own 2Xtreme disc once, and
-is skating within a minute with a controller, in menus that feel like part of
-2Xtreme. Project rules: [docs/PRODUCT_RULES.md](docs/PRODUCT_RULES.md).
-Current audit and plan: [docs/M1_AUDIT.md](docs/M1_AUDIT.md).
+## How it will work for players
 
-**Status:** work in progress, not yet playable as a standalone app. There are
-no releases yet.
+1. Download `2Xtreme.app` and drag it to Applications.
+2. Open it and choose (or drop) your **2Xtreme (USA)** disc image. Use the
+   `.cue` file so the music tracks come along.
+3. Wait about 15 seconds while it prepares the game for your Mac. Then you're
+   at the 2Xtreme intro. Later launches go straight to the game.
+
+**What you need:** a Mac with Apple silicon, and your own disc image of
+2Xtreme (USA), SCUS-94508, as `.cue` + `.bin` (or a single `.bin` / `.iso`,
+without music). `.chd` isn't supported yet. You don't need Xcode, Apple's
+command line tools, Homebrew or Python.
+
+**In the game:** press **Esc** (or **⌘,**, the controller's **Guide**
+button, or **Select + Start**) to pause and open the menu: Resume, Picture
+(sharpness, textures, full screen), Sound (volume), Quit. Changes apply
+straight away and are remembered.
+
+**Your files** live in `~/Library/Application Support/2Xtreme/`:
+
+| Folder | Holds |
+|---|---|
+| `disc/` | A copy of your disc image, so the game never loses it |
+| `game/` | The game built from it, plus `settings.toml` |
+| `saves/` | Memory cards (`card1.mcd`, `card2.mcd`) |
+
+To start over, quit and delete that folder.
+
+## What's done and what isn't
 
 | | |
 |---|---|
-| Players | 2 |
-| Region | USA |
-| Publisher | — |
-| Year | — |
+| ✅ First launch: disc check, preparing in ~15 s, straight in afterwards | |
+| ✅ Pause menu in 2Xtreme's style (keyboard verified; controller still to test) | |
+| ⏳ The game's own **Options** item opens the same menu | M4 |
+| ⏳ Full speed everywhere, verified picture settings, maybe true widescreen | M5 |
+| ⏳ Controller rebinding, rumble, Player 2, save states | M6 |
+| ⏳ Downloadable release | M7 |
 
-Scaffolded with the New Project Layout. See
-`psxrecomp/docs/GAME_PROJECT_SETUP.md` for the full flow.
-
-<!-- retcomm-readme-launcher -->
-## Retro Launcher
-
-You can run this title **standalone** (download the release zip, point it at
-your disc, play), or manage installs, updates, and disc/BIOS wiring with
-**[Retro Launcher](https://github.com/RetroPortingToolKit/Retro-Launcher)** —
-the Retro Compilation Manager hub for self-compiling recomps.
-
-[Downloads](https://github.com/RetroPortingToolKit/Retro-Launcher/releases) ·
-[Full README & features](https://github.com/RetroPortingToolKit/Retro-Launcher#readme)
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/RetroPortingToolKit/Retro-Launcher/main/docs/screenshots/hub-and-game-launcher.png" alt="Retro hub with a background build, next to a title’s recomp-ui launcher" width="720">
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/RetroPortingToolKit/Retro-Launcher/main/docs/screenshots/queue-and-background-build.png" alt="Background cmake build with titles queued" width="720">
-</p>
-
-Retro checks for updates, installs the prebuilt release zips, and automates
-BIOS/ROM/save plumbing so you are not stuck repeating each game’s first run by hand.
-<!-- /retcomm-readme-launcher -->
+Gameplay is the original. Experiments (16 racers, forced high-detail models)
+are developer-only and off.
 
 ## Legal
 
-You must own the original game. Disc images under `disc/` are gitignored and
-must never be committed. Retail BIOS dumps are not redistributed and no C
-derived from one may be committed; releases run on the bundled MIT OpenBIOS.
+You must own the original game. Nothing from the disc, no game code and no
+BIOS is in this repository or in the app: the game code is generated on your
+Mac from your own disc and stays there. The app runs on the bundled MIT
+OpenBIOS. psxrecomp is PolyForm Noncommercial, so releases are free.
 
-`generated/` (the recompiled game C) is **not** committed and never will be:
-it is derived from the disc. It is produced locally from your own disc
-(`psxrecomp_cli.py generate`, below) and the goal is for the app to do this
-for the player at first run. See [docs/PRODUCT_RULES.md](docs/PRODUCT_RULES.md).
+## For developers
 
-Default app icon: `assets/psxrecomp.ico` (and `.png` / `.svg`) — Retro-themed controller mark from `psxrecomp/assets/`. Windows builds embed it via `APP_ICON`.
+Start with [docs/HANDOFF.md](docs/HANDOFF.md). Project rules:
+[docs/PRODUCT_RULES.md](docs/PRODUCT_RULES.md), design:
+[docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md), player journey:
+[docs/PLAYER_JOURNEY.md](docs/PLAYER_JOURNEY.md), why on-device building:
+[docs/DISTRIBUTION_RESEARCH.md](docs/DISTRIBUTION_RESEARCH.md).
 
-Optional box art under `launcher_assets/img/` may come from
-[libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails)
-(`Named_Boxarts`); see `BOXART_SOURCE.txt` when present.
-
-## Quick start (dev)
+Build the app (needs Xcode, CMake, Ninja, Homebrew SDL3/FreeType/HarfBuzz,
+and zig 0.16.0 unpacked somewhere):
 
 ```bash
 git submodule update --init --recursive
+git -C psxrecomp apply ../patches/psxrecomp/*.patch
 ./psxrecomp/tools/ci/build_emitters.sh
-git -C psxrecomp apply ../patches/psxrecomp/*.patch   # local runtime changes
+ZIG_DIST=/path/to/zig-aarch64-macos-0.16.0 tools/macos/make_app.sh dist
+```
+
+`dist/2Xtreme.app` contains no game code. Test hooks (fresh data folder,
+automatic disc pick, scripted menu input) are listed in the handoff.
+
+Dev build with debug tools, from your own disc (the generated C stays local):
+
+```bash
 python3 psxrecomp/psxrecomp_cli.py generate \
-  --config game.toml --project-root . --disc disc/<your>.cue   # stays local
+  --config game.toml --project-root . --disc disc/<your>.cue
 cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --target psx-runtime
 ```
 
-Releases: none yet. Because the game C is generated from the player's disc,
-releases will ship the app and toolchain, not the compiled game.
-
-## Symbols
-
-Progressive map: `symbols.toml` → `python3 tools/sync_symbols.py` →
-`psx_symbols.h` (`PSX_FN_*`). See `psxrecomp/docs/SYMBOLS.md`.
-
-## Framework pins
-
-Submodule gitlinks (`psxrecomp`, optional `recomp-ui`, nested `recomp-net`)
-are authoritative. `framework_pins.txt` is an optional scaffold snapshot;
-release CI logs SHAs with `record_pins.sh` but builds whatever the gitlinks
-resolve to. Bump submodules deliberately — do not float on `main`/`master`
-in release CI.
+Built on [psxrecomp](https://github.com/mstan/psxrecomp) and
+[recomp-ui](https://github.com/RetroPortingToolKit/recomp-ui). Symbols:
+`symbols.toml` → `python3 tools/sync_symbols.py` → `psx_symbols.h` (see
+`psxrecomp/docs/SYMBOLS.md`).
 
 <!-- retcomm-readme-raid -->
 ---
