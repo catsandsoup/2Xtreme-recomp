@@ -78,10 +78,10 @@ const char *const kSmoothing[] = {"Sharp pixels", "Smooth"};
 const RecompRuntimeUiItem kItems[] = {
     {"twox.resume", "Resume", "Resume", "Back to the game.", RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
     {"twox.sharpness", "Picture", "Sharpness",
-     "How finely the 3D world is drawn. Higher looks sharper and needs a faster Mac.",
+     "How finely the 3D world is drawn. Higher looks sharper and needs a faster Mac. Shows when you resume.",
      RECOMP_RUNTIME_UI_CHOICE, 1, 4, 1, kSharpness, 4, nullptr},
     {"twox.smoothing", "Picture", "Textures",
-     "Sharp pixels keeps the original look. Smooth blends texture pixels.",
+     "Sharp pixels keeps the original look. Smooth blends texture pixels. Shows when you resume.",
      RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kSmoothing, 2, nullptr},
     {"twox.fullscreen", "Picture", "Full screen", "Fill the whole display.",
      RECOMP_RUNTIME_UI_BOOL, 0, 1, 1, nullptr, 0, nullptr},
@@ -269,7 +269,16 @@ void draw_menu(float W, float H) {
     g_u = H / 720.0f;
     /* The frozen game, dimmed, with the original menu's vignette. */
     dl->AddImage((ImTextureID)(intptr_t)S.frame_tex, ImVec2(0, 0), ImVec2(W, H), ImVec2(0, 1), ImVec2(1, 0));
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), IM_COL32(0, 0, 0, 105));
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), IM_COL32(0, 0, 0, 130));
+    /* A soft darker band behind the menu column, so our items stay readable
+     * over the game's own lettering while the scene shows at the sides. */
+    {
+        const float bw = 330 * g_u, fade = 150 * g_u, cxb = W / 2;
+        const ImU32 band = IM_COL32(0, 0, 0, 120), clear = IM_COL32(0, 0, 0, 0);
+        dl->AddRectFilledMultiColor(ImVec2(cxb - bw - fade, 0), ImVec2(cxb - bw, H), clear, band, band, clear);
+        dl->AddRectFilled(ImVec2(cxb - bw, 0), ImVec2(cxb + bw, H), band);
+        dl->AddRectFilledMultiColor(ImVec2(cxb + bw, 0), ImVec2(cxb + bw + fade, H), band, clear, clear, band);
+    }
     dl->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(W, H * 0.25f), IM_COL32(0, 0, 0, 120), IM_COL32(0, 0, 0, 120),
                                 IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0));
     dl->AddRectFilledMultiColor(ImVec2(0, H * 0.75f), ImVec2(W, H), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0),
@@ -344,12 +353,6 @@ void capture_frame() {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadBuffer(GL_BACK);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
-    if (getenv("TWOXTREME_TEST_SCRIPT")) {
-        unsigned char px[4] = {0};
-        glReadPixels(w / 2, h / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-        std::fprintf(stderr, "2Xtreme menu test: capture %dx%d centre=%d,%d,%d err=0x%x readfb=%d\n",
-                     w, h, px[0], px[1], px[2], glGetError(), prev_read);
-    }
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prev_read);
     glBindTexture(GL_TEXTURE_2D, (GLuint)prev_tex);
 }
@@ -384,10 +387,6 @@ void send(RecompRuntimeUiInput in, bool repeat) {
 }
 
 void handle_event(const SDL_Event &e) {
-    if (getenv("TWOXTREME_TEST_SCRIPT") && (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
-                                            e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN))
-        std::fprintf(stderr, "2Xtreme menu test: event 0x%x key=0x%x scancode=%d mod=0x%x repeat=%d which=%u\n", e.type,
-                     (unsigned)e.key.key, (int)e.key.scancode, (unsigned)e.key.mod, (int)e.key.repeat, (unsigned)e.key.which);
     if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
         S.quit_after_close = true;
         recomp_runtime_ui_close(S.ui);
