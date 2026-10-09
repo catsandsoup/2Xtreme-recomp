@@ -37,9 +37,20 @@ macOS libc headers and stubs are redistributed by the zig project. All are
 compatible with a free, noncommercial release (psxrecomp is PolyForm
 Noncommercial).
 
+## Spike result (2026-10-09): B passes
+
+`tools/macos/zig_module_spike.sh`, with zig 0.16.0 and `PATH=/bin` so Apple's
+tools are unreachable:
+
+- game C compiled by `zig cc -O3` in 3 s, linked into `game.dylib` in 6 s
+  (ad-hoc signed by the linker, depends only on libSystem);
+- prebuilt runtime with no game code loads it through
+  `platform/macos/game_module_loader.c` (5 forwarded entry points);
+- the game plays its intro and 3D fly-in and reaches the main menu, windowed.
+
 ## Decision
 
-1. Spike B for at most a day: build the game module with bundled `zig cc`,
+1. ~~Spike B for at most a day~~ Done, passed: build the game module with bundled `zig cc`,
    load it from the prebuilt runtime, reach the main menu, with no Apple
    tools on the path.
 2. If the spike passes, B becomes the first-run method and the Apple-tools
