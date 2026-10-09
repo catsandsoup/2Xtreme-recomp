@@ -21,3 +21,4 @@ Working rules:
 - Prove features with fresh screenshots of the real build. A green test is
   not proof that a player can use it.
 - Current audit and plan: [docs/M1_AUDIT.md](docs/M1_AUDIT.md).
+- Latest handoff (start here): [docs/HANDOFF.md](docs/HANDOFF.md).
