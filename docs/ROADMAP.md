@@ -61,7 +61,11 @@ reviews, and a commit. Nothing moves on until its acceptance passes.
 - 1-day MoltenVK/Vulkan spike; keep it only if it beats OpenGL.
 - Widescreen research: true expanded view with the HUD kept in shape.
   Ship only if it passes; otherwise it stays out.
-- **Accept:** steady full speed in a race at the default setting on an M1.
+- **Known issue (owner, 2026-10-09):** the game ran at 52 fps / 0.86× speed.
+  Suspects to measure: dev settings using the software renderer with 4×
+  supersampling; debug tools compiled into the dev build; overlay code
+  (front end, races) running in the interpreter. Must reach 1.00×.
+- **Accept:** steady full speed (1.00×) in a race at the default setting on an M1.
 
 ### M6 Controls, saves and the edge cases
 - Controller auto-detect with the right prompts; rebinding; rumble;
