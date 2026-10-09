@@ -82,10 +82,13 @@ if(APPLE)
 
     target_sources(psx-runtime PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/mac_menu.mm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/overlay/twox_overlay.cpp"
     )
 
     target_include_directories(psx-runtime PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/recomp-ui/src/common"
     )
 
     target_link_libraries(psx-runtime PRIVATE

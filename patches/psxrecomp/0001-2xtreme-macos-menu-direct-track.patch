@@ -1,3 +1,20 @@
+diff --git a/runtime/src/gpu_gl_renderer.c b/runtime/src/gpu_gl_renderer.c
+index e9c56bec..8865622b 100644
+--- a/runtime/src/gpu_gl_renderer.c
++++ b/runtime/src/gpu_gl_renderer.c
+@@ -7648,6 +7648,12 @@ static void gl_swap_with_osd(void) {
+             present_shot_done(wrote);
+         }
+     }
++    /* Host overlay (an in-game menu drawn by the title): runs last, over the
++     * composed frame. Weak, so titles without one are unaffected. */
++    {
++        extern void psx_host_overlay_present(SDL_Window *win) __attribute__((weak));
++        if (psx_host_overlay_present) psx_host_overlay_present(s_win);
++    }
+     SDL_GL_SwapWindow(s_win);
+ }
+ 
 diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
 index 77907729..f5977e5b 100644
 --- a/runtime/src/main.cpp
