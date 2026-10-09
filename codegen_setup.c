@@ -60,6 +60,8 @@ static pthread_t s_r2_thread;
 static volatile bool s_r2_running = false;
 static volatile bool s_r2_initialized = false;
 static uint32_t s_r2_patches_applied = 0;
+static volatile bool s_r2_racers_opted_in = false;
+static void r2_start_watcher(void);
 
 /* Helper to write a 32-bit word in guest RAM */
 static inline void r2_write_ram_u32(uint8_t *ram, uint32_t phys_addr, uint32_t val) {
@@ -260,7 +262,9 @@ static void *r2_watcher_thread(void *arg) {
                 ram[MASTER_GAME_STATE_ADDR + MGS_OFFSET_DEMO_FLAG]   = 0;
                 ram[MASTER_GAME_STATE_ADDR + MGS_OFFSET_OVERLAY_ID]  = exe_id;
             }
-            r2_apply_patches(ram);
+            if (s_r2_racers_opted_in) {
+                r2_apply_patches(ram);
+            }
         }
         usleep(500); /* 0.5 ms sleep = ~33 checks per frame */
     }
@@ -274,13 +278,27 @@ static void r2_cleanup(void) {
     }
 }
 
+/* Experimental features are off by default (docs/PRODUCT_RULES.md §8).
+ * Developers opt in to the 16-racer expansion with 2XTREME_DEV_RACERS=1.
+ * The watcher thread only runs when an experiment needs it. */
+static void r2_start_watcher(void) {
+    if (s_r2_running) return;
+    s_r2_running = true;
+    if (pthread_create(&s_r2_thread, NULL, r2_watcher_thread, NULL) == 0) {
+        atexit(r2_cleanup);
+    } else {
+        s_r2_running = false;
+    }
+}
+
 static void r2_init_runtime_hook(void) {
     if (s_r2_initialized) return;
     s_r2_initialized = true;
-    s_r2_running = true;
+    const char *racers_env = getenv("2XTREME_DEV_RACERS");
+    s_r2_racers_opted_in = racers_env && strcmp(racers_env, "1") == 0;
     psx_2xtreme_check_env();
-    if (pthread_create(&s_r2_thread, NULL, r2_watcher_thread, NULL) == 0) {
-        atexit(r2_cleanup);
+    if (s_r2_racers_opted_in || s_direct_track.enabled) {
+        r2_start_watcher();
     }
 }
 
@@ -310,6 +328,7 @@ void psx_direct_boot_race_track(int course_id, int track_num, int skater_id) {
         apply_direct_track_boot_hook(ram);
     }
     pthread_mutex_unlock(&s_direct_track_mutex);
+    r2_start_watcher();
 }
 
 void psx_2xtreme_set_direct_track(const DirectTrackConfig* cfg) {

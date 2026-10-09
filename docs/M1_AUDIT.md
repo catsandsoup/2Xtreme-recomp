@@ -38,7 +38,7 @@ The five lessons that matter most for this project right now:
 | Runs outside the repo | **Verified only because of local paths** | Copied bundle booted, but found the disc through a hardcoded `/Users/monty/Downloads/...` path in the bundled `game.toml` and `settings.toml`. |
 | Fresh user picks a disc | **Missing (verified broken)** | With no disc path the app prints "no graphical file picker on this platform", tells the user to use `--disc`, and exits. No window appears. |
 | On-device game generation | **Scaffolding** | `codegen_setup.c` setup host exists, but needs the repo, Python, cmake and `build-release/` at runtime. Not usable by a stranger. |
-| Boots to title screen | **Not verified, likely broken** | In 3 runs (headless 45 s, windowed 60 s, Start pressed) the picture stays on "Developed By / Sony Interactive Studios America". Cause unknown. Prime suspect: the always-on racer thread (below). |
+| Boots to main menu | **Verified (fixed 2026-10-09)** | Before: 3 runs stuck on "Developed By". Cause: the always-on racer thread. After gating it off, the same build reaches the main menu by 20 s, the attract demo race by 40 s and the credits by 60 s (headless, no input). Screenshots kept locally in `local/reference/` (game imagery is not published). |
 | Writable data location | **Wrong** | Settings, mod state and overlay captures write into `2Xtreme.app/Contents/MacOS` (`exe_dir_from_argv` anchors everything there). Saves point into the repo. |
 | Pre-boot launcher (recomp-ui) | **Implemented, not verified** | `skip_launcher = false`, but it never appeared in the fresh-user run. |
 | In-game pause/settings overlay | **Missing** | psxrecomp never calls `recomp_runtime_ui_*`. Only a save-state slot picker and OSD toasts exist. recomp-ui's runtime model (`recomp-ui/docs/RUNTIME_UI.md`, MIT) is ready to reuse. |
@@ -52,7 +52,7 @@ The five lessons that matter most for this project right now:
 | HD textures | **Placeholder** | Pack files use fake hashes (`0123456789ABCDEF`) and contain no artwork, yet the feature is enabled by default. |
 | CD-DA soundtrack mod | **Manifest only, not verified** | Enabled by default. |
 | R1 forced high-poly | **Always on, hand-edited into `generated/`** | Lost on regeneration (kept as `local/generated-hand-edits.diff`). Its test reads a static JSON file and credits a BIOS ROM address (`0x1FC085D8`) as the skater draw function, so the evidence is invalid. |
-| R2 16 racers | **Always on, unsafe** | A thread started by a C constructor writes guest RAM every 0.5 ms in every run, including menus, and overwrites the game's racer table at `0x8007D134` before any race. |
+| R2 16 racers | **Now off by default (developer opt-in `2XTREME_DEV_RACERS=1`)** | It was a constructor-started thread writing guest RAM every 0.5 ms in every run, overwriting the racer table at `0x8007D134` before any race, and it blocked boot. It still needs rebuilding as a one-shot overlay-load hook. |
 | Direct-track boot | **Developer feature, hand edits** | `--direct-track` plus `generated/` edits and the same thread. |
 | psxrecomp changes | **Layering problem** | Runtime `main.cpp` includes the game's `codegen_setup.h`. Kept as `patches/psxrecomp/*.patch`. |
 | Tests | **Not player-facing** | Existence, catalog and frame-count checks; tier 4 counts come from a saved JSON file, not a live run. |
@@ -65,10 +65,19 @@ DuckStation's cheat database lists RAM addresses for this disc
 (P1 speed `0x8007D490`, P1 placement `0x8007D4CC`), and public DuckStation
 savestates for SCUS-94508 exist, which gives an external reference that boots.
 
+## 2a. First style reference: the main menu
+
+Graffiti on a dark brick wall, under a single spotlight. A spray-paint
+"MAIN MENU" logo. Chunky, outlined block capitals in green and yellow, with
+the selected item in yellow and larger. A bottom-left prompt strip shows the
+D-pad and ✕ "Select". The overlay theme should come from this: dark wall
+backdrop, outlined block type, yellow focus, the same prompt strip. Nothing
+rounded or pastel.
+
 ## 3. What has to be replaced or removed
 
-1. **R2 racer thread** (`codegen_setup.c`): delete the constructor thread.
-   Re-add 16 racers as an overlay-load hook that runs once, off by default,
+1. **R2 racer thread** (`codegen_setup.c`): now off by default. Next,
+   delete the thread and re-add 16 racers as an overlay-load hook that runs once, off by default,
    in a Developer page.
 2. **Hand edits in `generated/`** (LOD, direct track): re-implement as
    recompiler config or runtime hooks so regeneration reproduces them. Off by
@@ -173,9 +182,9 @@ overlay. Back returns to 2Xtreme's main menu, not gameplay.
 
 ## 8. Dev work left, in order
 
-0. **Boot to the title screen** (blocker). Disable the racer thread, retest.
-   If still stuck, compare against a pristine generation and the DuckStation
-   reference. Capture original menu screenshots for the style tokens.
+0. ~~**Boot to the title screen**~~ Done: the racer thread was the blocker.
+   Still to do: capture the Options, character and course screens for the
+   style tokens, and play a full race with input.
 1. **Portable app and first run**: bundle dylibs, user data dir, macOS disc
    picker, first-run screen, on-device generation spike.
 2. **Pause/settings overlay** on recomp-ui's runtime model, with the
