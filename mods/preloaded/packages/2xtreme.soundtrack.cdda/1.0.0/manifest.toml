@@ -1,0 +1,26 @@
+format_version = 7
+id = "2xtreme.soundtrack.cdda"
+version = "1.0.0"
+name = "2Xtreme CDDA Soundtrack Replacement"
+author = "2Xtreme Modding Team"
+description = "High-fidelity Redbook CDDA audio track replacements (Tracks 02-08) for 2Xtreme."
+license = "MIT"
+resolver = "declarative"
+
+[[target]]
+game_id = "SCUS-94508"
+
+[[feature]]
+id = "cdda-soundtrack"
+name = "CDDA Audio Replacement"
+description = "Mounts and plays replacement Redbook CDDA audio tracks (Tracks 02-08)."
+group = "Audio"
+default_enabled = true
+
+[[resource]]
+feature = "cdda-soundtrack"
+id = "tracks"
+label = "Audio Tracks Directory"
+description = "Directory containing replacement CDDA audio tracks (.bin) or CUE sheet."
+format = "directory"
+required = false

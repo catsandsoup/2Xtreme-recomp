@@ -1,0 +1,82 @@
+# Autofilled by tools/new_project_layout/probe_disc.py from your legal dump.
+# Review before shipping. Runtime quirks / overlay seeds still need hand work.
+
+[game]
+name = "2Xtreme"
+id = "SCUS-94508"
+players = 2
+exe = "disc/SCUS_945.08"
+# No disc path here: the player picks their own disc at first run and the
+# choice is remembered in their settings, never in this shipped file.
+load_address = "0x80010A00"
+entry_pc = "0x80012644"
+text_size = "0x0001E800"
+stack_base = "0x801FFFFC"
+
+# Digests are for data Track 01 (first BINARY FILE / TRACK 01).
+[prepare_disc]
+out_dir = "disc"
+bin_name = "2Xtreme (USA) (Track 1).bin"
+cue_name = "2Xtreme (USA).cue"
+boot_exe = "SCUS_945.08"
+known_sizes = [45715824]
+known_md5 = [
+  "5a012d2f8dc067ebd18ac4a549a07029",
+]
+known_sha1 = [
+  "3f25e5d1366e60e70a416109711e109d48c9f19b",
+]
+known_crc32 = [
+  "aad124a6",
+]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+
+[runtime]
+window_title = "2Xtreme Recompiled"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "16:9"
+pgxp_mod_only = false
+
+[audio]
+# Buffer cushion in ms and SPU float shadow configuration.
+buffer_ms = 180
+spu_hq = false
+# CDDA Redbook audio replacement: Tracks 02-08 mounted via multi-track CUE
+# (8 tracks total: Track 01 data + Tracks 02-08 audio) and 2xtreme.soundtrack.cdda mod package.
+
+[controller]
+default_mode = "digital"
+
+# Online mount gate: digests + track count + optional TOC fingerprint
+# (see docs/NETPLAY.md).
+multitap_analog = true
+[netplay]
+require_cue = true
+required_tracks = 8
+required_disc_fp = "bc82c68019436ffbed1edfacf2bb8f15d6743d7f174452acf96b45caa5145830"
+# [widescreen] candidates from `psxrecomp-analyze --scan-widescreen`.
+# Static analysis only — no runtime, trace, or overlay capture was read.
+#
+# These are CANDIDATES. Every one satisfies the instruction form
+# code_generator.cpp requires, so none can break the build, but only
+# playtesting shows whether a site is the right one to widen.
+# Paste into game.toml and cut what does not help.
+
+[widescreen.cull]
+auto_screen_x = true   # 2 function(s) carry the screen-extent signature
+# WARNING: these do not match a console display mode — treat as a guess.
+# Discovered from the image: width/height compare immediates scored by
+# CO-OCCURRENCE in the same function (the screen-extent signature),
+# weighted toward GTE code and the console's real display modes.
+# Verify before trusting — extra entries only widen what auto_screen_x
+# considers, but a wrong one widens the wrong compare.
+screen_w_imms = ["0x101", "0x103", "0x119"]
+screen_h_imms = ["0x121"]

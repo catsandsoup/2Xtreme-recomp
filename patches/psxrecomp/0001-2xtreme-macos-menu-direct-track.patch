@@ -1,0 +1,208 @@
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 77907729..f5977e5b 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -134,6 +134,7 @@ extern "C" void psx_game_codegen_relaunch_or_exit(const char* disc_path);
+  * must NOT be gated on PSX_HAS_GAME_CODEGEN (set for any linked game C) or
+  * RECOMP_LAUNCHER alone. */
+ #if defined(PSX_HAS_CODEGEN_SETUP_HOST)
++#include "../../../codegen_setup.h"
+ extern "C" void psx_game_codegen_forward_if_built(int argc, char** argv);
+ #endif
+ #include "psx_sdl.h"
+@@ -14213,6 +14214,55 @@ namespace {
+ }  // namespace
+ #endif
+ 
++#if defined(__APPLE__)
++#include "mac_menu.h"
++
++static bool g_mac_fast_boot = false;
++
++extern "C" {
++void psx_engine_set_widescreen(int mode) {
++    int num = 4, den = 3;
++    if (mode == 1) { num = 16; den = 9; }
++    else if (mode == 2) { num = 21; den = 9; }
++    g_video_aspect_num = num;
++    g_video_aspect_den = den;
++    gl_renderer_set_display_aspect(num, den);
++    vk_renderer_set_display_aspect(num, den);
++    refresh_widescreen_projection();
++}
++
++int psx_engine_get_widescreen(void) {
++    if (g_video_aspect_num == 16 && g_video_aspect_den == 9) return 1;
++    if (g_video_aspect_num == 21 && g_video_aspect_den == 9) return 2;
++    return 0;
++}
++
++void psx_engine_set_resolution(int ir_preset) {
++    g_video_internal_res = ir_preset;
++    int scale = 1;
++    if (ir_preset == 720) scale = 3;
++    else if (ir_preset == 1080) scale = 4;
++    else if (ir_preset == 1440) scale = 6;
++    else if (ir_preset == 2160) scale = 9;
++    else if (ir_preset == -1) scale = 4;
++    g_video_scale = scale;
++    gr_set_scale(scale);
++}
++
++int psx_engine_get_resolution(void) {
++    return g_video_internal_res;
++}
++
++void psx_engine_set_fast_boot(int enabled) {
++    g_mac_fast_boot = (enabled != 0);
++}
++
++int psx_engine_get_fast_boot(void) {
++    return g_mac_fast_boot ? 1 : 0;
++}
++}
++#endif
++
+ int main(int argc, char** argv) {
+     /* Force line-buffered output so messages appear even if killed. */
+     std::setvbuf(stdout, nullptr, _IOLBF, BUFSIZ);
+@@ -14275,6 +14325,8 @@ int main(int argc, char** argv) {
+      * PSX_NO_LAUNCHER env) forces it off. --launcher wins if both are given. */
+     bool        force_launcher    = false;
+     bool        force_no_launcher = false;
++    bool        cli_verify_menu   = false;
++    bool        cli_direct_boot   = false;
+     /* CLI overrides for running several instances side by side (soak fleet).
+      * These win over any game-config value and, crucially, work for the BIOS
+      * (which has no [game]-block config schema, so debug_port/renderer can't be
+@@ -14368,6 +14420,40 @@ int main(int argc, char** argv) {
+             force_launcher = true;
+         } else if (std::strcmp(argv[i], "--no-launcher") == 0) {
+             force_no_launcher = true;
++        } else if (std::strcmp(argv[i], "--verify-menu") == 0) {
++            cli_verify_menu = true;
++        } else if (std::strcmp(argv[i], "--direct-track") == 0 && i + 1 < argc) {
++            const char* track_name = argv[++i];
++#if defined(PSX_HAS_CODEGEN_SETUP_HOST)
++            psx_2xtreme_parse_direct_track_arg(track_name);
++#else
++            (void)track_name;
++#endif
++            force_no_launcher = true;
++            cli_direct_boot = true;
++#if defined(__APPLE__)
++            g_mac_fast_boot = true;
++#endif
++        } else if (std::strcmp(argv[i], "--direct-players") == 0 && i + 1 < argc) {
++            int p = std::atoi(argv[++i]);
++#if defined(PSX_HAS_CODEGEN_SETUP_HOST)
++            DirectTrackConfig cfg = *psx_2xtreme_get_direct_track();
++            cfg.num_players = (p == 2) ? 2 : 1;
++            psx_2xtreme_set_direct_track(&cfg);
++#else
++            (void)p;
++#endif
++        } else if (std::strcmp(argv[i], "--direct-skater") == 0 && i + 1 < argc) {
++            int s = std::atoi(argv[++i]);
++#if defined(PSX_HAS_CODEGEN_SETUP_HOST)
++            DirectTrackConfig cfg = *psx_2xtreme_get_direct_track();
++            cfg.skater_id = (s >= 0 && s <= 15) ? s : 0;
++            psx_2xtreme_set_direct_track(&cfg);
++#else
++            (void)s;
++#endif
++        } else if (std::strcmp(argv[i], "--fast-forward") == 0) {
++            g_manual_turbo_latched = 1;
+         } else if (std::strcmp(argv[i], "--headless-opengl") == 0) {
+             g_headless = 1;
+             g_headless_opengl = 1;
+@@ -14421,6 +14507,20 @@ int main(int argc, char** argv) {
+         }
+     }
+ 
++#if defined(__APPLE__)
++    if (cli_verify_menu) {
++        psx_macos_menu_install();
++        int ok = psx_macos_menu_verify_instantiation();
++        if (ok) {
++            std::printf("NSMenu instantiation: SUCCESS\n");
++            return 0;
++        } else {
++            std::fprintf(stderr, "NSMenu instantiation: FAILED\n");
++            return 1;
++        }
++    }
++#endif
++
+     std::string default_game_config_storage;
+     if (!game_config_path) {
+         std::filesystem::path default_game_config =
+@@ -14518,7 +14618,7 @@ int main(int argc, char** argv) {
+     int        instant_rate  = 0;   /* 0 = cdrom.c built-in default */
+     std::vector<PSXRecompV4::RuntimeConfig::WarmCdRoute> warm_cd_routes;
+     uint32_t   game_entry_pc = 0;
+-    bool       fast_boot     = false;  /* DEPRECATED alias: HLE boot-skip only */
++    bool       fast_boot     = cli_direct_boot;  /* DEPRECATED alias: HLE boot-skip only */
+     bool       bios_hle      = false;  /* HLE kernel-service tier (bios_hle.c) */
+     bool       bios_hle_keep_intro = false;
+     /* Text-image guard source, captured at config load; armed after the disc
+@@ -15155,7 +15255,18 @@ int main(int argc, char** argv) {
+                 "DEPRECATED and ignored; enable the \"Fast Loading (host "
+                 "pacing)\" mod instead. The stale key is dropped on the next "
+                 "settings save.\n");
+-        if (us.has_fast_boot)      fast_boot = us.fast_boot;
++        if (us.has_fast_boot) {
++            fast_boot = us.fast_boot;
++#if defined(__APPLE__)
++            g_mac_fast_boot = fast_boot;
++#endif
++        }
++        if (cli_direct_boot) {
++            fast_boot = true;
++#if defined(__APPLE__)
++            g_mac_fast_boot = true;
++#endif
++        }
+         if (us.has_bios_hle)       bios_hle  = us.bios_hle;
+         if (us.has_fullscreen)     g_fullscreen      = us.fullscreen;
+         if (us.has_aspect_ratio) {
+@@ -15645,9 +15756,17 @@ int main(int argc, char** argv) {
+      * --no-launcher, or the persisted [launcher] skip_launcher setting — unless
+      * --launcher forces it back on (mirrors snesrecomp's SkipLauncher / --launcher).
+      * This removes the dismiss-the-launcher round-trip for scripted/debug runs. */
++#if defined(__APPLE__)
++    /* On macOS, the native NSMenu interface in the macOS Menu Bar supersedes
++     * the pre-boot ImGui launcher dialog. The game opens directly into the
++     * main engine window, and all settings are selectable via native dropdowns. */
++    const bool want_launcher =
++        (force_launcher && std::getenv("PSX_FORCE_IMGUI_LAUNCHER") != nullptr);
++#else
+     const bool want_launcher =
+         force_launcher ||
+         (!std::getenv("PSX_NO_LAUNCHER") && !force_no_launcher && !skip_launcher_setting);
++#endif
+     if (want_launcher) {
+         launcher_boot_timing_mark("host:before_sdl_init");
+     /* Per-monitor DPI awareness, BEFORE any SDL_Init.
+@@ -17383,6 +17502,9 @@ session_reboot:
+         return 1;
+     }
+     psx_apply_window_icon(sdl_window, argv[0]);
++#if defined(__APPLE__)
++    psx_macos_menu_install();
++#endif
+     s_window_fullscreen = {};
+     if (psx_window_fullscreen_set(sdl_window, &s_window_fullscreen, g_fullscreen) != 0)
+         std::fprintf(stderr, "Fullscreen setup failed: %s\n", SDL_GetError());
+@@ -17744,7 +17866,11 @@ session_reboot:
+         PsxBiosHleRequest req;
+         req.bios_hle               = bios_hle ? 1 : 0;
+         req.keep_intro             = bios_hle_keep_intro ? 1 : 0;
++#if defined(__APPLE__)
++        req.fast_boot              = (fast_boot || g_mac_fast_boot) ? 1 : 0;
++#else
+         req.fast_boot              = fast_boot ? 1 : 0;
++#endif
+         req.have_deliver_event_ret = (psx_bios_image.deliver_event_ret != 0);
+         req.have_shell_entry       = (psx_bios_image.shell_entry_phys != 0);
+         req.have_game_entry        = (game_entry_pc != 0);
